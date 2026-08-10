@@ -1,0 +1,3 @@
+# 個人データはコミットしない (Google Drive にのみ保存する)
+kb_data*.json
+*.xlsx
