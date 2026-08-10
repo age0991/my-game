@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ナレッジベース ビューア</title>
+<style>
+  :root{
+    --bg:#1e1e1e; --bg2:#252525; --side:#161616; --border:#333;
+    --text:#dcddde; --muted:#999; --accent:#a78bfa; --accent2:#7c3aed;
+    --hub:#e9b308; --mail:#4c8dff; --claude:#a78bfa; --memo:#22c55e;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;
+    font-size:14px; display:flex; flex-direction:column; overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; gap:12px; padding:8px 14px;
+    background:var(--side); border-bottom:1px solid var(--border); flex:none;
+  }
+  header h1{font-size:14px; font-weight:600; color:var(--accent)}
+  header .meta{color:var(--muted); font-size:12px}
+  header .spacer{flex:1}
+  button,.btn{
+    background:var(--bg2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;
+  }
+  button:hover{border-color:var(--accent)}
+  #layout{flex:1; display:flex; min-height:0}
+  /* ---- sidebar ---- */
+  #sidebar{
+    width:290px; flex:none; background:var(--side); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  #search{
+    margin:10px; padding:7px 10px; background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; outline:none;
+  }
+  #search:focus{border-color:var(--accent)}
+  #tags{display:flex; flex-wrap:wrap; gap:5px; padding:0 10px 8px; max-height:120px; overflow-y:auto; flex:none}
+  .tag{
+    font-size:11px; padding:2px 8px; border-radius:10px; cursor:pointer;
+    background:var(--bg2); color:var(--muted); border:1px solid var(--border);
+  }
+  .tag.active{background:var(--accent2); color:#fff; border-color:var(--accent2)}
+  #notelist{flex:1; overflow-y:auto; padding:0 6px 10px}
+  .nitem{
+    padding:6px 8px; border-radius:6px; cursor:pointer; display:flex; gap:7px; align-items:baseline;
+  }
+  .nitem:hover{background:var(--bg2)}
+  .nitem.sel{background:#2e2450}
+  .dot{width:8px; height:8px; border-radius:50%; flex:none; align-self:center}
+  .nitem .t{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .nitem .d{margin-left:auto; color:var(--muted); font-size:11px; flex:none}
+  /* ---- main ---- */
+  #main{flex:1; display:flex; min-width:0}
+  #note{flex:1; overflow-y:auto; padding:26px 34px; min-width:0}
+  #note h2{font-size:22px; margin-bottom:6px}
+  #note .meta{color:var(--muted); font-size:12px; margin-bottom:14px; display:flex; gap:14px; flex-wrap:wrap}
+  #note .summary{line-height:1.8; margin-bottom:22px; white-space:pre-wrap}
+  .sect{margin-bottom:20px}
+  .sect h3{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;
+    border-bottom:1px solid var(--border); padding-bottom:4px; margin-bottom:8px}
+  .wikilink{
+    color:var(--accent); cursor:pointer; text-decoration:none;
+  }
+  .wikilink:hover{text-decoration:underline}
+  .linkrow{padding:3px 0}
+  .rel{color:var(--muted); font-size:12px; margin-left:6px}
+  .tagchip{color:var(--accent); font-size:12px; cursor:pointer}
+  a.ext{color:#6ea8fe}
+  /* ---- graph ---- */
+  #graphwrap{width:44%; min-width:320px; border-left:1px solid var(--border);
+    position:relative; background:#191919; flex:none; display:flex; flex-direction:column}
+  #graphwrap .bar{position:absolute; top:8px; left:10px; z-index:2; color:var(--muted); font-size:11px}
+  canvas{width:100%; height:100%; display:block; flex:1}
+  /* ---- empty state ---- */
+  #empty{
+    position:absolute; inset:0; background:rgba(20,20,20,.96); z-index:10;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+  }
+  #empty .card{max-width:520px; padding:34px; border:1px dashed #555; border-radius:12px}
+  #empty h2{color:var(--accent); margin-bottom:12px; font-size:18px}
+  #empty p{color:var(--muted); line-height:1.9; font-size:13px; margin-bottom:14px}
+  #empty.drag .card{border-color:var(--accent)}
+  @media (max-width:900px){ #graphwrap{display:none} #sidebar{width:230px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗂 ナレッジベース</h1>
+  <span class="meta" id="stats"></span>
+  <span class="spacer"></span>
+  <button id="btn-open">JSONを読み込む</button>
+  <button id="btn-clear">クリア</button>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</header>
+<div id="layout">
+  <div id="sidebar">
+    <input id="search" placeholder="検索 (タイトル・要約・出所)…">
+    <div id="tags"></div>
+    <div id="notelist"></div>
+  </div>
+  <div id="main">
+    <div id="note"></div>
+    <div id="graphwrap">
+      <div class="bar">グラフビュー — ドラッグで移動 / ホイールで拡大縮小 / ノードクリックで表示</div>
+      <canvas id="graph"></canvas>
+    </div>
+  </div>
+</div>
+
+<div id="empty">
+  <div class="card">
+    <h2>kb_data.json を読み込んでください</h2>
+    <p>Google Drive の「Claudeナレッジベース」フォルダから最新の
+       <b>kb_data_YYYY-MM-DD.json</b> をダウンロードし、<br>
+       この画面に<b>ドラッグ＆ドロップ</b>するか、下のボタンで選択してください。<br>
+       データはこのブラウザ内 (localStorage) にのみ保存され、サーバーには送信されません。</p>
+    <button class="btn" id="btn-open2">ファイルを選択</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const TYPE_COLOR = {"ハブ":"#e9b308","メール":"#4c8dff","Claude":"#a78bfa","メモ":"#22c55e"};
+let DATA=null, byId={}, backlinks={}, selected=null, activeTag=null;
+
+/* ---------- data ---------- */
+function loadData(json){
+  if(!json || !Array.isArray(json.notes)) { alert("kb_data.json の形式ではありません (notes 配列が必要)"); return; }
+  DATA=json; byId={}; backlinks={};
+  for(const n of DATA.notes) byId[n.id]=n;
+  for(const n of DATA.notes) for(const l of (n.links||[])){
+    if(byId[l.to]) (backlinks[l.to]=backlinks[l.to]||[]).push({from:n.id, rel:l.rel||"関連"});
+  }
+  localStorage.setItem("kb_data", JSON.stringify(json));
+  document.getElementById("empty").style.display="none";
+  selected = selected && byId[selected] ? selected : (DATA.notes.find(n=>n.type==="ハブ")||DATA.notes[0]).id;
+  renderAll(); initGraph();
+}
+function clearData(){
+  localStorage.removeItem("kb_data"); DATA=null; selected=null;
+  document.getElementById("empty").style.display="flex";
+}
+
+/* ---------- sidebar ---------- */
+function renderAll(){ renderTags(); renderList(); renderNote(); updateStats(); }
+function updateStats(){
+  const e=DATA.notes.reduce((a,n)=>a+(n.links||[]).length,0);
+  document.getElementById("stats").textContent =
+    `${DATA.notes.length} ノート · ${e} リンク · 更新 ${DATA.updated||"-"}`;
+}
+function renderTags(){
+  const counts={};
+  for(const n of DATA.notes) for(const t of (n.tags||[])) counts[t]=(counts[t]||0)+1;
+  const el=document.getElementById("tags"); el.innerHTML="";
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([t,c])=>{
+    const s=document.createElement("span");
+    s.className="tag"+(activeTag===t?" active":""); s.textContent=`#${t} ${c}`;
+    s.onclick=()=>{activeTag=activeTag===t?null:t; renderTags(); renderList();};
+    el.appendChild(s);
+  });
+}
+function filteredNotes(){
+  const q=document.getElementById("search").value.trim().toLowerCase();
+  return DATA.notes.filter(n=>{
+    if(activeTag && !(n.tags||[]).includes(activeTag)) return false;
+    if(!q) return true;
+    return [n.title,n.summary,n.source,n.id].join(" ").toLowerCase().includes(q);
+  }).sort((a,b)=> (a.type==="ハブ")!==(b.type==="ハブ") ? (a.type==="ハブ"?-1:1)
+                : (b.date||"").localeCompare(a.date||""));
+}
+function renderList(){
+  const el=document.getElementById("notelist"); el.innerHTML="";
+  for(const n of filteredNotes()){
+    const d=document.createElement("div");
+    d.className="nitem"+(n.id===selected?" sel":"");
+    d.innerHTML=`<span class="dot" style="background:${TYPE_COLOR[n.type]||"#888"}"></span>
+      <span class="t">${esc(n.title)}</span><span class="d">${(n.date||"").slice(5)}</span>`;
+    d.onclick=()=>select(n.id);
+    el.appendChild(d);
+  }
+}
+function select(id){ selected=id; renderList(); renderNote(); focusNode(id); }
+
+/* ---------- note pane ---------- */
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function linkHtml(id,rel){
+  const n=byId[id];
+  return `<div class="linkrow"><a class="wikilink" onclick="select('${id}')">[[${esc(n?n.title:id)}]]</a>`+
+         `<span class="rel">${esc(rel||"")}</span></div>`;
+}
+function renderNote(){
+  const el=document.getElementById("note");
+  const n=byId[selected]; if(!n){el.innerHTML=""; return;}
+  const tags=(n.tags||[]).map(t=>`<span class="tagchip" onclick="setTag('${esc(t)}')">#${esc(t)}</span>`).join(" ");
+  const out=(n.links||[]).map(l=>linkHtml(l.to,l.rel)).join("")||`<span class="rel">なし</span>`;
+  const back=(backlinks[n.id]||[]).map(b=>linkHtml(b.from,b.rel)).join("")||`<span class="rel">なし</span>`;
+  el.innerHTML=`
+    <h2>${esc(n.title)}</h2>
+    <div class="meta">
+      <span style="color:${TYPE_COLOR[n.type]||"#888"}">● ${esc(n.type)}</span>
+      <span>${esc(n.date||"")}</span><span>${esc(n.source||"")}</span><span>${esc(n.id)}</span>
+      ${n.url?`<a class="ext" href="${esc(n.url)}" target="_blank" rel="noopener">元を開く ↗</a>`:""}
+    </div>
+    <div class="summary">${esc(n.summary||"")}</div>
+    <div class="sect"><h3>タグ</h3>${tags||'<span class="rel">なし</span>'}</div>
+    <div class="sect"><h3>リンク先</h3>${out}</div>
+    <div class="sect"><h3>バックリンク (${(backlinks[n.id]||[]).length})</h3>${back}</div>`;
+}
+function setTag(t){ activeTag=t; renderTags(); renderList(); }
+
+/* ---------- graph (force-directed) ---------- */
+let G={nodes:[],edges:[],cx:0,cy:0,scale:1,drag:null,pan:null,hover:null,alpha:1};
+const cvs=document.getElementById("graph"), ctx=cvs.getContext("2d");
+function initGraph(){
+  const deg={};
+  G.edges=[]; G.nodes=DATA.notes.map((n,i)=>({id:n.id,type:n.type,title:n.title,
+    x:Math.cos(i*2.4)*220+Math.random()*40, y:Math.sin(i*2.4)*220+Math.random()*40, vx:0, vy:0}));
+  const idx=Object.fromEntries(G.nodes.map((n,i)=>[n.id,i]));
+  for(const n of DATA.notes) for(const l of (n.links||[])) if(idx[l.to]!=null){
+    G.edges.push([idx[n.id],idx[l.to]]);
+    deg[n.id]=(deg[n.id]||0)+1; deg[l.to]=(deg[l.to]||0)+1;
+  }
+  for(const n of G.nodes) n.r=4+Math.min(10,Math.sqrt(deg[n.id]||0)*2.2);
+  G.scale=1; G.cx=0; G.cy=0; G.alpha=1;
+}
+function step(){
+  if(!DATA) return;
+  const N=G.nodes, a=G.alpha;
+  if(a>0.005){
+    for(let i=0;i<N.length;i++) for(let j=i+1;j<N.length;j++){
+      const p=N[i],q=N[j]; let dx=q.x-p.x, dy=q.y-p.y;
+      let d2=dx*dx+dy*dy||1; if(d2<160000){
+        const f=1400/d2*a; dx*=f; dy*=f; p.vx-=dx; p.vy-=dy; q.vx+=dx; q.vy+=dy;
+      }
+    }
+    for(const [i,j] of G.edges){
+      const p=N[i],q=N[j]; const dx=q.x-p.x, dy=q.y-p.y;
+      const d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-90)*0.02*a;
+      p.vx+=dx/d*f; p.vy+=dy/d*f; q.vx-=dx/d*f; q.vy-=dy/d*f;
+    }
+    for(const p of N){
+      p.vx-=p.x*0.0015*a; p.vy-=p.y*0.0015*a;      // 中心への引力
+      if(p!==G.drag){ p.x+=p.vx; p.y+=p.vy; }
+      p.vx*=0.85; p.vy*=0.85;
+    }
+    G.alpha*=0.997;
+  }
+  draw(); requestAnimationFrame(step);
+}
+function draw(){
+  const w=cvs.clientWidth, h=cvs.clientHeight;
+  if(cvs.width!==w*devicePixelRatio){cvs.width=w*devicePixelRatio; cvs.height=h*devicePixelRatio;}
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.save(); ctx.translate(w/2+G.cx,h/2+G.cy); ctx.scale(G.scale,G.scale);
+  const selIdx=G.nodes.findIndex(n=>n.id===selected);
+  const near=new Set(); if(selIdx>=0) for(const[i,j] of G.edges){ if(i===selIdx)near.add(j); if(j===selIdx)near.add(i);}
+  ctx.lineWidth=1/G.scale;
+  for(const [i,j] of G.edges){
+    const hl=i===selIdx||j===selIdx;
+    ctx.strokeStyle=hl?"rgba(167,139,250,.8)":"rgba(255,255,255,.13)";
+    ctx.beginPath(); ctx.moveTo(G.nodes[i].x,G.nodes[i].y); ctx.lineTo(G.nodes[j].x,G.nodes[j].y); ctx.stroke();
+  }
+  G.nodes.forEach((n,i)=>{
+    const hl=i===selIdx||near.has(i)||n===G.hover;
+    ctx.globalAlpha = selIdx<0||hl ? 1 : .35;
+    ctx.fillStyle=TYPE_COLOR[n.type]||"#888";
+    ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,7); ctx.fill();
+    if(i===selIdx){ctx.strokeStyle="#fff"; ctx.stroke();}
+    if(hl||G.scale>1.2){
+      ctx.fillStyle="#ccc"; ctx.font=`${11/G.scale}px sans-serif`; ctx.textAlign="center";
+      ctx.fillText(n.title.slice(0,16),n.x,n.y+n.r+12/G.scale);
+    }
+    ctx.globalAlpha=1;
+  });
+  ctx.restore();
+}
+function toWorld(e){
+  const r=cvs.getBoundingClientRect();
+  return {x:(e.clientX-r.left-r.width/2-G.cx)/G.scale, y:(e.clientY-r.top-r.height/2-G.cy)/G.scale};
+}
+function nodeAt(p){ return G.nodes.find(n=>{const dx=n.x-p.x,dy=n.y-p.y; return dx*dx+dy*dy<(n.r+4)*(n.r+4);}); }
+cvs.addEventListener("mousedown",e=>{
+  const n=nodeAt(toWorld(e));
+  if(n){G.drag=n; G.alpha=Math.max(G.alpha,.3);} else G.pan={x:e.clientX-G.cx,y:e.clientY-G.cy};
+});
+addEventListener("mousemove",e=>{
+  if(G.drag){const p=toWorld(e); G.drag.x=p.x; G.drag.y=p.y; G.alpha=Math.max(G.alpha,.3);}
+  else if(G.pan){G.cx=e.clientX-G.pan.x; G.cy=e.clientY-G.pan.y;}
+  else {G.hover=DATA?nodeAt(toWorld(e)):null; cvs.style.cursor=G.hover?"pointer":"default";}
+});
+addEventListener("mouseup",e=>{
+  if(G.drag && G.hover===G.drag){} G.drag=null; G.pan=null;
+});
+cvs.addEventListener("click",e=>{ const n=nodeAt(toWorld(e)); if(n) select(n.id); });
+cvs.addEventListener("wheel",e=>{
+  e.preventDefault();
+  G.scale=Math.min(4,Math.max(.25,G.scale*(e.deltaY<0?1.1:0.9)));
+},{passive:false});
+function focusNode(id){ G.alpha=Math.max(G.alpha,.15); }
+
+/* ---------- file loading ---------- */
+function readFile(f){
+  const r=new FileReader();
+  r.onload=()=>{ try{ loadData(JSON.parse(r.result)); }catch(err){ alert("JSONの読み込みに失敗: "+err.message);} };
+  r.readAsText(f,"utf-8");
+}
+document.getElementById("file").addEventListener("change",e=>{ if(e.target.files[0]) readFile(e.target.files[0]); e.target.value=""; });
+document.getElementById("btn-open").onclick=()=>document.getElementById("file").click();
+document.getElementById("btn-open2").onclick=()=>document.getElementById("file").click();
+document.getElementById("btn-clear").onclick=()=>{ if(confirm("このブラウザに保存したデータを削除しますか？")) clearData(); };
+document.getElementById("search").addEventListener("input",renderList);
+addEventListener("dragover",e=>{e.preventDefault(); document.getElementById("empty").classList.add("drag");});
+addEventListener("dragleave",()=>document.getElementById("empty").classList.remove("drag"));
+addEventListener("drop",e=>{
+  e.preventDefault(); document.getElementById("empty").classList.remove("drag");
+  const f=e.dataTransfer.files[0]; if(f) readFile(f);
+});
+
+/* ---------- boot ---------- */
+const saved=localStorage.getItem("kb_data");
+if(saved){ try{ loadData(JSON.parse(saved)); }catch(_){ clearData(); } }
+requestAnimationFrame(step);
+</script>
+</body>
+</html>
