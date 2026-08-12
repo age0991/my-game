@@ -1,0 +1,37 @@
+filters:
+  and:
+    - file.inFolder("notes")
+
+properties:
+  status:
+    displayName: "状態"
+  tags:
+    displayName: "タグ"
+  file.mtime:
+    displayName: "更新日時"
+
+views:
+  - type: table
+    name: "すべてのノート"
+    order:
+      - file.name
+      - status
+      - tags
+      - file.mtime
+  - type: table
+    name: "作業中"
+    filters:
+      and:
+        - 'status == "active"'
+    order:
+      - file.name
+      - tags
+      - file.mtime
+  - type: cards
+    name: "下書き"
+    filters:
+      and:
+        - 'status == "draft"'
+    order:
+      - file.name
+      - tags

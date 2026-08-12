@@ -1,0 +1,76 @@
+{
+	"nodes": [
+		{
+			"id": "a1b2c3d4e5f60718",
+			"type": "group",
+			"x": -60,
+			"y": -60,
+			"width": 1380,
+			"height": 520,
+			"label": "Metaverse Shadow Race 開発マップ"
+		},
+		{
+			"id": "0f1e2d3c4b5a6978",
+			"type": "file",
+			"file": "Home.md",
+			"x": 0,
+			"y": 0,
+			"width": 400,
+			"height": 400
+		},
+		{
+			"id": "1122334455667788",
+			"type": "file",
+			"file": "notes/Metaverse Shadow Race.md",
+			"x": 480,
+			"y": 0,
+			"width": 400,
+			"height": 180,
+			"color": "4"
+		},
+		{
+			"id": "99aabbccddeeff00",
+			"type": "file",
+			"file": "notes/ゲームアイデア.md",
+			"x": 480,
+			"y": 240,
+			"width": 400,
+			"height": 180,
+			"color": "3"
+		},
+		{
+			"id": "deadbeefcafe0123",
+			"type": "text",
+			"text": "**次の一手**\n\n- レース演出のプロトタイプ\n- スコア記録の実装",
+			"x": 960,
+			"y": 120,
+			"width": 300,
+			"height": 180,
+			"color": "1"
+		}
+	],
+	"edges": [
+		{
+			"id": "e0000000000000a1",
+			"fromNode": "0f1e2d3c4b5a6978",
+			"fromSide": "right",
+			"toNode": "1122334455667788",
+			"toSide": "left"
+		},
+		{
+			"id": "e0000000000000a2",
+			"fromNode": "0f1e2d3c4b5a6978",
+			"fromSide": "right",
+			"toNode": "99aabbccddeeff00",
+			"toSide": "left"
+		},
+		{
+			"id": "e0000000000000a3",
+			"fromNode": "1122334455667788",
+			"fromSide": "right",
+			"toNode": "deadbeefcafe0123",
+			"toSide": "left",
+			"label": "改善候補"
+		}
+	]
+}
